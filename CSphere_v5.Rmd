@@ -1,0 +1,1402 @@
+---
+title: "CSphere"
+author: "Michayla Moore"
+date: "2024-08-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+# Install required packages if you don't have them
+#install.packages("Matrix")
+#install.packages("Seurat")  # or install BiocManager::install("SingleCellExperiment")
+
+# Load the packages
+library(Matrix)
+library(Seurat)
+library(GEOquery)
+library(ggplot2)
+library(tidyverse)
+library(reshape2)
+library(dplyr)
+library(patchwork)
+library(writexl)
+library(tibble)
+```
+
+```{r}
+# Load the GEO dataset
+gse <- getGEO("GSE149699", GSEMatrix = TRUE)
+```
+
+
+```{r}
+# Raw data
+# Download supplementary files for GSE149699
+getGEOSuppFiles("GSE149699")
+
+# Unzip files (if needed)
+unzip("GSE149699_RAW.zip", exdir = "GSE149699_files")
+```
+
+```{r}
+# List all the zipped files in the directory
+zip_files <- list.files("GSE149699_files", pattern = "\\.gz$", full.names = TRUE)
+# List all .gz files
+gz_files <- list.files("GSE149699_files", pattern = "\\.gz$", full.names = TRUE)
+
+for (gz_file in gz_files) {
+  sample_name <- tools::file_path_sans_ext(basename(gz_file))
+  target_dir <- paste0("GSE149699_files/", sample_name)
+  
+  # Create a directory for the sample if it doesn't exist
+  if (!dir.exists(target_dir)) {
+    dir.create(target_dir, recursive = TRUE)
+  }
+  
+  # Define the output file path
+  output_file <- paste0(target_dir, "/", tools::file_path_sans_ext(basename(gz_file)))
+  
+  # Unzip the .gz file into the target directory
+  tryCatch({
+    gunzip(gz_file, destname = output_file, overwrite = TRUE)
+  }, error = function(e) {
+    message("Error unzipping file: ", gz_file, "\n", e)
+  })
+}
+
+```
+
+```{r}
+# Get all file names
+file_names <- list.files("GSE149699_files", full.names = TRUE)
+
+# Extract unique sample identifiers
+sample_ids <- unique(gsub("_.*", "", basename(file_names)))
+
+# Print sample IDs to verify
+print(sample_ids)
+
+```
+
+```{r}
+# Define file paths for each sample
+EC_barcodes <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509138_EC_barcodes.tsv"
+EC_features <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509138_EC_features.tsv"
+EC_matrix <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509138_EC_matrix.mtx"
+
+CF_barcodes <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509139_CF_barcodes.tsv"
+CF_features <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509139_CF_features.tsv"
+CF_matrix <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509139_CF_matrix.mtx"
+
+SMC_barcodes <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509140_SMC_barcodes.tsv"
+SMC_features <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509140_SMC_features.tsv"
+SMC_matrix <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509140_SMC_matrix.mtx"
+
+Ad_barcodes <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509141_adult_barcodes.tsv"
+Ad_features <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509141_adult_features.tsv"
+Ad_matrix <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509141_adult_matrix.mtx"
+
+Neo_barcodes <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509142_neonatal_barcodes.tsv"
+Neo_features <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509142_neonatal_features.tsv"
+Neo_matrix <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/GSM4509142_neonatal_matrix.mtx"
+
+# Load the data for sample 1
+barcodesEC <- read.table(EC_barcodes, header = FALSE, stringsAsFactors = FALSE)[[1]]
+featuresEC <- read.table(EC_features, header = FALSE, stringsAsFactors = FALSE)
+matrixEC <- readMM(EC_matrix)
+
+# Create Seurat object for sample 1
+seurat_sampleEC <- CreateSeuratObject(counts = matrixEC, assay = "RNA", project = "EC")
+rownames(seurat_sampleEC) <- featuresEC$V2
+colnames(seurat_sampleEC) <- barcodesEC
+
+# Load the data for sample 1
+barcodesCF <- read.table(CF_barcodes, header = FALSE, stringsAsFactors = FALSE)[[1]]
+featuresCF <- read.table(CF_features, header = FALSE, stringsAsFactors = FALSE)
+matrixCF <- readMM(CF_matrix)
+
+# Create Seurat object for sample 2
+seurat_sampleCF <- CreateSeuratObject(counts = matrixCF, assay = "RNA", project = "CF")
+rownames(seurat_sampleCF) <- featuresCF$V2
+colnames(seurat_sampleCF) <- barcodesCF
+
+# Load the data for sample 3
+barcodesSMC <- read.table(SMC_barcodes, header = FALSE, stringsAsFactors = FALSE)[[1]]
+featuresSMC <- read.table(SMC_features, header = FALSE, stringsAsFactors = FALSE)
+matrixSMC <- readMM(SMC_matrix)
+
+# Create Seurat object for sample 4
+seurat_sampleSMC <- CreateSeuratObject(counts = matrixSMC, assay = "RNA", project = "SMC")
+rownames(seurat_sampleSMC) <- featuresSMC$V2
+colnames(seurat_sampleSMC) <- barcodesSMC
+
+# Load the data for sample 1
+barcodesAd <- read.table(Ad_barcodes, header = FALSE, stringsAsFactors = FALSE)[[1]]
+featuresAd <- read.table(Ad_features, header = FALSE, stringsAsFactors = FALSE)
+matrixAd <- readMM(Ad_matrix)
+
+# Create Seurat object for sample 1
+seurat_sampleAd <- CreateSeuratObject(counts = matrixAd, assay = "RNA", project = "Ad")
+rownames(seurat_sampleAd) <- featuresAd$V2
+colnames(seurat_sampleAd) <- barcodesAd
+
+# Load the data for sample 1
+barcodesNeo <- read.table(Neo_barcodes, header = FALSE, stringsAsFactors = FALSE)[[1]]
+featuresNeo <- read.table(Neo_features, header = FALSE, stringsAsFactors = FALSE)
+matrixNeo <- readMM(Neo_matrix)
+
+# Create Seurat object for sample 1
+seurat_sampleNeo <- CreateSeuratObject(counts = matrixNeo, assay = "RNA", project = "Neo")
+rownames(seurat_sampleNeo) <- featuresNeo$V2
+colnames(seurat_sampleNeo) <- barcodesNeo
+
+```
+
+
+```{r}
+seurat_sampleEC$orig.ident <- "EC"
+seurat_sampleCF$orig.ident <- "CF"
+seurat_sampleSMC$orig.ident <- "SMC"
+seurat_sampleAd$orig.ident <- "AdultCDC"
+seurat_sampleNeo$orig.ident <- "NeonatalCDC"
+
+# Identify duplicate gene names
+duplicated_genes <- rownames(seurat_sampleEC)[duplicated(rownames(seurat_sampleEC))]
+
+# Print duplicated genes to confirm
+cat("Duplicate genes found:\n", unique(duplicated_genes), "\n")
+
+# Identify rows to remove (those with duplicate names)
+dup_indices <- which(duplicated(rownames(seurat_sampleEC)) | duplicated(rownames(seurat_sampleEC), fromLast = TRUE))
+
+# Remove duplicate rows
+seurat_sampleEC_clean <- seurat_sampleEC[-dup_indices, ]
+
+# Verify removal
+remaining_duplicates <- rownames(seurat_sampleEC_clean)[duplicated(rownames(seurat_sampleEC_clean))]
+cat("Remaining duplicate genes (if any):\n", unique(remaining_duplicates), "\n")
+
+# Replace the original object with the cleaned one
+seurat_sampleEC <- seurat_sampleEC_clean
+
+# Normalize each Seurat object
+seurat_sampleEC <- NormalizeData(seurat_sampleEC)
+
+#CF
+# Identify duplicate gene names
+duplicated_genesCF <- rownames(seurat_sampleCF)[duplicated(rownames(seurat_sampleCF))]
+
+# Print duplicated genes to confirm
+cat("Duplicate genes found:\n", unique(duplicated_genesCF), "\n")
+
+# Identify rows to remove (those with duplicate names)
+dup_indicesCF <- which(duplicated(rownames(seurat_sampleCF)) | duplicated(rownames(seurat_sampleCF), fromLast = TRUE))
+
+# Remove duplicate rows
+seurat_sampleCF_clean <- seurat_sampleCF[-dup_indicesCF, ]
+
+# Verify removal
+remaining_duplicatesCF <- rownames(seurat_sampleCF_clean)[duplicated(rownames(seurat_sampleCF_clean))]
+cat("Remaining duplicate genes (if any):\n", unique(remaining_duplicatesCF), "\n")
+
+# Replace the original object with the cleaned one
+seurat_sampleCF <- seurat_sampleCF_clean
+
+# Normalize each Seurat object
+seurat_sampleCF <- NormalizeData(seurat_sampleCF)
+
+# Function to remove duplicate gene names from a Seurat object
+clean_and_normalize <- function(seurat_object) {
+  # Identify duplicate gene names
+  duplicated_genes <- rownames(seurat_object)[duplicated(rownames(seurat_object))]
+  
+  # Print duplicated genes to confirm
+  cat("Duplicate genes found:\n", unique(duplicated_genes), "\n")
+  
+  # Identify rows to remove (those with duplicate names)
+  dup_indices <- which(duplicated(rownames(seurat_object)) | duplicated(rownames(seurat_object), fromLast = TRUE))
+  
+  # Remove duplicate rows
+  seurat_object_clean <- seurat_object[-dup_indices, ]
+  
+  # Verify removal
+  remaining_duplicates <- rownames(seurat_object_clean)[duplicated(rownames(seurat_object_clean))]
+  cat("Remaining duplicate genes (if any):\n", unique(remaining_duplicates), "\n")
+  
+  # Replace the original object with the cleaned one
+  seurat_object <- seurat_object_clean
+  
+  # Normalize the data
+  seurat_object <- NormalizeData(seurat_object)
+  
+  return(seurat_object)
+}
+
+# Apply the function to each Seurat object
+seurat_sampleCF <- clean_and_normalize(seurat_sampleCF)
+seurat_sampleSMC <- clean_and_normalize(seurat_sampleSMC)
+seurat_sampleAd <- clean_and_normalize(seurat_sampleAd)
+seurat_sampleNeo <- clean_and_normalize(seurat_sampleNeo)
+
+
+seurat_sampleCF <- NormalizeData(seurat_sampleCF)
+seurat_sampleSMC <- NormalizeData(seurat_sampleSMC)
+seurat_sampleAd <- NormalizeData(seurat_sampleAd)
+seurat_sampleNeo <- NormalizeData(seurat_sampleNeo)
+```
+
+```{r}
+seurat_sampleAd <- NormalizeData(seurat_sampleAd) %>% FindVariableFeatures() %>% ScaleData()
+seurat_sampleNeo <- NormalizeData(seurat_sampleNeo) %>% FindVariableFeatures() %>% ScaleData()
+seurat_sampleEC <- NormalizeData(seurat_sampleEC) %>% FindVariableFeatures() %>% ScaleData()
+seurat_sampleSMC <- NormalizeData(seurat_sampleSMC) %>% FindVariableFeatures() %>% ScaleData()
+seurat_sampleCF <- NormalizeData(seurat_sampleCF) %>% FindVariableFeatures() %>% ScaleData()
+```
+
+```{r}
+seurat_objects <- list(seurat_sampleAd, seurat_sampleCF, seurat_sampleEC, seurat_sampleNeo, seurat_sampleSMC)
+
+# Ident integration features
+features <- SelectIntegrationFeatures(object.list = seurat_objects)
+
+common_features <- Reduce(intersect, lapply(seurat_objects, function(x) rownames(GetAssayData(x, assay = "RNA", slot = "counts"))))
+seurat_objects <- lapply(seurat_objects, function(x) {
+  x <- subset(x, features = common_features)
+  return(x)
+})
+
+# Align
+anchors <- FindIntegrationAnchors(object.list = seurat_objects, anchor.features = features)
+```
+
+```{r}
+# integrate data
+seurat_combined <- IntegrateData(anchorset = anchors)
+```
+
+
+```{r}
+# Check available assays and their slots
+Assays(seurat_combined)
+
+# Plot histogram for number of features
+hist(seurat_combined$nFeature_RNA, main = "Number of Features per Cell", xlab = "Number of Features", col = "lightblue", breaks = 50)
+
+#High Mitochondrial Content: A high proportion of mitochondrial gene expression (e.g., greater than 5-10%) is usually a sign of unhealthy or dying cells.
+# Find mitochondrial genes (assuming you're working with human data)
+#seurat_combined[["percent.mt"]] <- PercentageFeatureSet(seurat_combined, pattern = "^MT-")
+
+meta <- seurat_combined@meta.data
+
+# Plot histogram for percentage of mitochondrial genes
+#hist(seurat_combined$percent.mt, main = "Percentage of Mitochondrial Genes per Cell", xlab = "Percentage of Mitochondrial #Genes", col = "lightgreen", breaks = 50)
+```
+
+
+```{r}
+#seurat_combined_filter <- subset(seurat_combined, subset = nFeature_RNA > 100 & nFeature_RNA < 2500 & percent.mt < 5)
+seurat_combined_filter <- subset(seurat_combined, subset = nFeature_RNA > 100 & nFeature_RNA < 2500)
+
+# Plot histogram for number of features
+hist(seurat_combined_filter$nFeature_RNA, main = "Number of Features per Cell", xlab = "Number of Features", col = "lightblue", breaks = 50)
+
+# Plot histogram for percentage of mitochondrial genes
+#hist(seurat_combined_filter$percent.mt, main = "Percentage of Mitochondrial Genes per Cell", xlab = "Percentage of #Mitochondrial Genes", col = "lightgreen", breaks = 50)
+```
+
+```{r}
+# Assuming counts.Ad, counts.CF, etc., are matrices
+combined_counts <- cbind(seurat_combined@assays$RNA$counts.Ad, 
+                         seurat_combined@assays$RNA$counts.CF, 
+                         seurat_combined@assays$RNA$counts.SMC, 
+                         seurat_combined@assays$RNA$counts.Neo, 
+                         seurat_combined@assays$RNA$counts.EC)  # Add all your counts matrices here
+
+# Create Seurat object with combined counts
+seurat_combined <- CreateSeuratObject(counts = combined_counts)
+```
+
+```{r}
+seurat_combined <- NormalizeData(seurat_combined)
+seurat_combined <- FindVariableFeatures(seurat_combined)
+seurat_combined <- ScaleData(seurat_combined)
+seurat_combined <- RunPCA(seurat_combined)
+
+print(seurat_combined[["pca"]])
+
+# Recompute PCA
+seurat_combined <- RunPCA(seurat_combined, npcs = 30)
+
+# Print PCA summary
+print(seurat_combined[["pca"]])
+```
+
+
+```{r}
+seurat_combined <- FindNeighbors(seurat_combined, dims = 1:14)
+seurat_combined <- FindClusters(seurat_combined)
+```
+
+```{r}
+# Add or update metadata in seurat_combined
+seurat_combined <- AddMetaData(seurat_combined, metadata = meta)
+
+# View metadata
+head(seurat_combined@meta.data)
+
+#RUN UMAP
+seurat_combined <- RunUMAP(seurat_combined, dims = 1:14)
+DimPlot(seurat_combined, reduction = "umap", group.by = "orig.ident")
+
+```
+
+```{r}
+# Define custom colors for your specific cell types including AdultCDC and NeonatalCDC
+custom_colors <- c("CF" = "darkgreen", 
+                   "EC" = "purple", 
+                   "SMC" = "darkorange", 
+                   "AdultCDC" = "blue", 
+                   "NeonatalCDC" = "red")
+
+#library(RColorBrewer)
+custom_colors <- brewer.pal(n = 5, name = "Dark2")
+
+# Create UMAP plot with custom colors for specific cell types and CDC groups
+DimPlot(seurat_combined, 
+        reduction = "umap", 
+        group.by = "orig.ident", 
+        cols = custom_colors)
+
+# Create UMAP plot with custom colors for specific cell types and CDC groups
+DimPlot(seurat_combined, 
+        reduction = "umap", 
+        group.by = "orig.ident", 
+        cols = custom_colors) +  # Adjust point size as needed
+    theme(legend.position = c(0, 1),  # Set legend position to top left
+          legend.justification = c("left", "top"))  # Adjust justification
+
+# Create UMAP plot with custom colors for specific cell types and CDC groups
+umap_plot <- DimPlot(seurat_combined, 
+                      reduction = "umap", 
+                      group.by = "orig.ident", 
+                      cols = custom_colors) +  # Adjust point size
+    theme(legend.position = c(0, 1),  # Set legend position to top left
+          legend.justification = c("left", "top"))  # Adjust justification
+
+# Save the plot as a PNG image with dimensions 5x5 inches
+ggsave("umap_plot.png", plot = umap_plot, width = 5, height = 5, dpi = 1200)
+
+umap_plot
+
+```
+
+
+
+```{r}
+all_features <- rownames(seurat_combined[["RNA"]])
+head(all_features)  # View the first few features
+all_features_df <- as.data.frame(all_features)
+
+any(all_features_df == "ANXA2")
+
+FeaturePlot(seurat_combined,reduction = "umap",features="CXCL6",split.by="orig.ident")
+```
+
+```{r}
+
+# Extract UMAP coordinates
+umap_coords <- Embeddings(seurat_combined, reduction = "umap")
+
+# Extract gene expression data and metadata
+gene_data <- FetchData(seurat_combined, vars = c("CXCL6", "NT5E", "CTHRC1", "orig.ident"))
+
+# Combine UMAP coordinates with gene expression data
+umap_data <- cbind(umap_coords, gene_data)
+
+# View the first few rows of the combined data
+head(umap_data)
+
+umap_data <- umap_data %>%
+  rename(CD73 = NT5E)
+
+# Reshape the data to long format
+umap_long <- melt(umap_data, id.vars = c("umap_1", "umap_2", "orig.ident"), 
+                  measure.vars = c("CXCL6", "CD73", "CTHRC1"),
+                  variable.name = "gene", value.name = "expression")
+
+# View the first few rows of the reshaped data
+head(umap_long)
+
+# Use ggplot to create custom plots with different colors for each gene
+ggplot(umap_long, aes(x = umap_1, y = umap_2, color = expression)) +
+  geom_point() +
+  facet_grid(gene ~ orig.ident) +  # Facet by gene and cell type
+  scale_color_gradient(low = "lightgrey", high = "blue") +
+  theme_minimal() +
+  ggtitle("Gene Expression on UMAP")
+
+
+```
+
+```{r}
+# Create the ggplot object
+umap_plot2 <- ggplot(umap_long, aes(x = umap_1, y = umap_2, color = expression)) +
+  geom_point() +
+  facet_grid(gene ~ orig.ident) +  # Facet by gene and cell type
+  scale_color_gradient(low = "lightgrey", high = "blue") +
+  theme_minimal() +
+  theme(text = element_text(size = 12))
+
+# Save the plot as a PNG image with dimensions 5x5 inches
+ggsave("gene_expression_umap.png", plot = umap_plot2, width = 7, height = 5, dpi = 1200)
+
+```
+
+
+```{r}
+# Extract UMAP coordinates
+umap_coords <- Embeddings(seurat_combined, reduction = "umap")
+
+# Extract gene expression data and metadata
+gene_data <- FetchData(seurat_combined, vars = c("ENG", "ACVRL1", "SOST", "IGFBP3", "ISLR", "orig.ident"))
+
+# Combine UMAP coordinates with gene expression data
+umap_data <- cbind(umap_coords, gene_data)
+
+# View the first few rows of the combined data
+head(umap_data)
+
+umap_data <- umap_data %>%
+  rename(CD105 = ENG)
+
+# Reshape the data to long format
+umap_long <- melt(umap_data, id.vars = c("umap_1", "umap_2", "orig.ident"), 
+                  measure.vars = c("CD105", "ACVRL1", "SOST", "IGFBP3", "ISLR"),
+                  variable.name = "gene", value.name = "expression")
+
+# View the first few rows of the reshaped data
+head(umap_long)
+
+# Use ggplot to create custom plots with different colors for each gene
+ggplot(umap_long, aes(x = umap_1, y = umap_2, color = expression)) +
+  geom_point() +
+  facet_grid(gene ~ orig.ident) +  # Facet by gene and cell type
+  scale_color_gradient(low = "lightgrey", high = "blue") +
+  theme_minimal() +
+  ggtitle("Gene Expression on UMAP")
+```
+
+
+```{r}
+seurat_combined <- SetIdent(seurat_combined, value = "orig.ident")
+
+# Compare AdultCDC to CF
+markers_adultcdc_vs_cf <- FindMarkers(seurat_combined, ident.1 = "AdultCDC", ident.2 = "CF")
+
+# Compare AdultCDC to EC
+markers_adultcdc_vs_ec <- FindMarkers(seurat_combined, ident.1 = "AdultCDC", ident.2 = "EC")
+
+# Compare AdultCDC to SMC
+markers_adultcdc_vs_smc <- FindMarkers(seurat_combined, ident.1 = "AdultCDC", ident.2 = "SMC")
+
+# Compare AdultCDC to NeonatalCDC
+markers_adultcdc_vs_neonatalcdc <- FindMarkers(seurat_combined, ident.1 = "AdultCDC", ident.2 = "NeonatalCDC")
+markers_adultcdc_vs_neonatalcdc
+
+all_genes <- rownames(seurat_combined)
+if ("NT5E" %in% all_genes) {
+    print("NT5E is present in the dataset.")
+} else {
+    print("NT5E is NOT present in the dataset.")
+}
+
+VlnPlot(seurat_combined, features = "NT5E", group.by = "orig.ident")
+
+markers_adultcdc_vs_neonatalcdc_newthresh <- FindMarkers(seurat_combined, 
+                                               ident.1 = "AdultCDC", 
+                                               ident.2 = "NeonatalCDC", 
+                                               logfc.threshold = 0, 
+                                               min.pct = 0)
+
+nt5e_results <- markers_adultcdc_vs_neonatalcdc_newthresh[rownames(markers_adultcdc_vs_neonatalcdc_newthresh) == "NT5E", ]
+print(nt5e_results)
+
+
+```
+
+```{r}
+# Find top expressing genes in each comparison
+top_genes_adultcdc_vs_cf <- markers_adultcdc_vs_cf %>%
+  arrange(desc(avg_log2FC)) %>%
+  head(20)
+
+top_genes_adultcdc_vs_ec <- markers_adultcdc_vs_ec %>%
+  arrange(desc(avg_log2FC)) %>%
+  head(20)
+
+top_genes_adultcdc_vs_smc <- markers_adultcdc_vs_smc %>%
+  arrange(desc(avg_log2FC)) %>%
+  head(20)
+
+top_genes_adultcdc_vs_neonatalcdc <- markers_adultcdc_vs_neonatalcdc %>%
+  arrange(desc(avg_log2FC)) %>%
+  head(20)
+
+# Combine top genes from all comparisons
+combined_top_genes <- bind_rows(
+  top_genes_adultcdc_vs_cf %>% mutate(comparison = "AdultCDC vs CF"),
+  top_genes_adultcdc_vs_ec %>% mutate(comparison = "AdultCDC vs EC"),
+  top_genes_adultcdc_vs_smc %>% mutate(comparison = "AdultCDC vs SMC"),
+  top_genes_adultcdc_vs_neonatalcdc %>% mutate(comparison = "AdultCDC vs NeonatalCDC")
+)
+
+# View combined results
+head(combined_top_genes)
+
+```
+```{r}
+# Example: Plot top genes from the AdultCDC vs CF comparison
+FeaturePlot(seurat_combined, features = rownames(top_genes_adultcdc_vs_cf))
+```
+
+```{r}
+# Extract logFC for CXCL6 from each comparison
+logfc_values <- data.frame(
+  Comparison = c("AdultCDC vs CF", "AdultCDC vs EC", "AdultCDC vs SMC", "AdultCDC vs NeonatalCDC"),
+  logFC = c(
+    markers_adultcdc_vs_cf["CXCL6", "avg_log2FC"],
+    markers_adultcdc_vs_ec["CXCL6", "avg_log2FC"],
+    markers_adultcdc_vs_smc["CXCL6", "avg_log2FC"],
+    markers_adultcdc_vs_neonatalcdc["CXCL6", "avg_log2FC"]
+  )
+)
+
+ggplot(logfc_values, aes(x = Comparison, y = logFC, fill = Comparison)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  labs(title = "Log Fold Change of CXCL6 Across Comparisons",
+       x = "Comparison",
+       y = "Log Fold Change") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_brewer(palette = "Purples") +
+  ylim(-1, 10)
+
+# Extract logFC and p-values for CXCL6 from each comparison
+logfc_and_pvalues <- data.frame(
+  Comparison = c("AdultCDC vs CF", "AdultCDC vs EC", "AdultCDC vs SMC", "AdultCDC vs NeonatalCDC"),
+  logFC = c(
+    markers_adultcdc_vs_cf["CXCL6", "avg_log2FC"],
+    markers_adultcdc_vs_ec["CXCL6", "avg_log2FC"],
+    markers_adultcdc_vs_smc["CXCL6", "avg_log2FC"],
+    markers_adultcdc_vs_neonatalcdc["CXCL6", "avg_log2FC"]
+  ),
+  p_value = c(
+    markers_adultcdc_vs_cf["CXCL6", "p_val"],
+    markers_adultcdc_vs_ec["CXCL6", "p_val"],
+    markers_adultcdc_vs_smc["CXCL6", "p_val"],
+    markers_adultcdc_vs_neonatalcdc["CXCL6", "p_val"]
+  )
+)
+
+# Add significance stars based on p-value
+logfc_and_pvalues$significance <- cut(logfc_and_pvalues$p_value,
+  breaks = c(-Inf, 0.001, 0.01, 0.05, 1),
+  labels = c("***", "**", "*", "ns"),
+  right = FALSE
+)
+
+cxcl6 <- ggplot(logfc_and_pvalues, aes(x = Comparison, y = logFC, fill = Comparison)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = significance), vjust = -0.5, size = 5) +
+  theme_minimal() +
+  labs(title = "Log Fold Change of CXCL6 Across Comparisons",
+       y = "Log Fold Change") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_brewer(palette = "Purples") +
+  ylim(-1, 10)
+
+cxcl6
+
+```
+
+```{r}
+# List of genes to analyze
+genes <- c("MMP1", "CXCL5", "NT5E", "TFP12", "LRP1", "IGFBP7")
+
+# Create an empty list to store plots
+plots <- list()
+
+# Loop through each gene
+for (gene in genes) {
+  
+  # Extract logFC for each gene from each comparison
+  logfc_values <- data.frame(
+    Comparison = c("AdultCDC vs CF", "AdultCDC vs EC", "AdultCDC vs SMC", "AdultCDC vs NeonatalCDC"),
+    logFC = c(
+      markers_adultcdc_vs_cf[gene, "avg_log2FC"],
+      markers_adultcdc_vs_ec[gene, "avg_log2FC"],
+      markers_adultcdc_vs_smc[gene, "avg_log2FC"],
+      markers_adultcdc_vs_neonatalcdc_newthresh[gene, "avg_log2FC"]
+    )
+  )
+  
+  # Extract logFC and p-values for each gene from each comparison
+  logfc_and_pvalues <- data.frame(
+    Comparison = c("AdultCDC vs CF", "AdultCDC vs EC", "AdultCDC vs SMC", "AdultCDC vs NeonatalCDC"),
+    logFC = c(
+      markers_adultcdc_vs_cf[gene, "avg_log2FC"],
+      markers_adultcdc_vs_ec[gene, "avg_log2FC"],
+      markers_adultcdc_vs_smc[gene, "avg_log2FC"],
+      markers_adultcdc_vs_neonatalcdc_newthresh[gene, "avg_log2FC"]
+    ),
+    p_value = c(
+      markers_adultcdc_vs_cf[gene, "p_val"],
+      markers_adultcdc_vs_ec[gene, "p_val"],
+      markers_adultcdc_vs_smc[gene, "p_val"],
+      markers_adultcdc_vs_neonatalcdc_newthresh[gene, "p_val"]
+    )
+  )
+  
+  # Add significance stars based on p-value
+  logfc_and_pvalues$significance <- cut(logfc_and_pvalues$p_value,
+    breaks = c(-Inf, 0.001, 0.01, 0.05, 1),
+    labels = c("***", "**", "*", "ns"),
+    right = FALSE
+  )
+  
+  # Create the plot for the current gene
+  plot <- ggplot(logfc_and_pvalues, aes(x = Comparison, y = logFC, fill = Comparison)) +
+    geom_bar(stat = "identity") +
+    geom_text(aes(label = significance), vjust = -0.5, size = 5) +
+    theme_minimal() +
+    labs(title = paste("Log Fold Change of", gene, "Across Comparisons"),
+         x = "Comparison",
+         y = "Log Fold Change") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_fill_brewer(palette = "Purples") 
+    #ylim(-2, 2)
+  
+  # Add the plot to the list of plots
+  plots[[gene]] <- plot
+}
+
+# Display all plots
+for (gene in genes) {
+  print(plots[[gene]])
+}
+
+```
+
+```{r}
+# List of genes to analyze (remove CSF3, TFPI2, CXCL3, MTRNR2L12... C3, TFPI2??)
+genes <- c("SOST", "CXCL8", "CXCL1", "CXCL5", "CTHRC1", "NT5E", "COL3A1", "HLA-B", "CREG1",
+           "COL6A1", "C3", "MRC2", "COL5A1", "COL1A2", "LIPA", "IGFBP7", "AGRN")
+
+# Create an empty list to store plots
+plots <- list()
+
+# Loop through each gene
+for (gene in genes) {
+  
+  # Extract logFC for each gene from each comparison
+  logfc_values <- data.frame(
+    Comparison = c("AdultCDC vs CF", "AdultCDC vs EC", "AdultCDC vs SMC", "AdultCDC vs NeonatalCDC"),
+    logFC = c(
+      markers_adultcdc_vs_cf[gene, "avg_log2FC"],
+      markers_adultcdc_vs_ec[gene, "avg_log2FC"],
+      markers_adultcdc_vs_smc[gene, "avg_log2FC"],
+      markers_adultcdc_vs_neonatalcdc_newthresh[gene, "avg_log2FC"]
+    )
+  )
+  
+  # Extract logFC and p-values for each gene from each comparison
+  logfc_and_pvalues <- data.frame(
+    Comparison = c("AdultCDC vs CF", "AdultCDC vs EC", "AdultCDC vs SMC", "AdultCDC vs NeonatalCDC"),
+    logFC = c(
+      markers_adultcdc_vs_cf[gene, "avg_log2FC"],
+      markers_adultcdc_vs_ec[gene, "avg_log2FC"],
+      markers_adultcdc_vs_smc[gene, "avg_log2FC"],
+      markers_adultcdc_vs_neonatalcdc_newthresh[gene, "avg_log2FC"]
+    ),
+    p_value = c(
+      markers_adultcdc_vs_cf[gene, "p_val"],
+      markers_adultcdc_vs_ec[gene, "p_val"],
+      markers_adultcdc_vs_smc[gene, "p_val"],
+      markers_adultcdc_vs_neonatalcdc_newthresh[gene, "p_val"]
+    )
+  )
+  
+  # Add significance stars based on p-value
+  logfc_and_pvalues$significance <- cut(logfc_and_pvalues$p_value,
+    breaks = c(-Inf, 0.001, 0.01, 0.05, 1),
+    labels = c("***", "**", "*", "ns"),
+    right = FALSE
+  )
+  
+  # Create the plot for the current gene
+  plot <- ggplot(logfc_and_pvalues, aes(x = Comparison, y = logFC, fill = Comparison)) +
+    geom_bar(stat = "identity") +
+    geom_text(aes(label = significance), vjust = -0.9, size = 7) +
+    theme_minimal() +
+    labs(title = bquote(italic(.(gene))),
+         x = NULL,
+         y = "Log Fold Change") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10, face = "bold"),
+          plot.title = element_text(hjust = 0.5, face = "italic", size = 14)) +
+    scale_fill_manual(values = c("AdultCDC vs CF" = "blue",
+                                 "AdultCDC vs EC" = "black",
+                                 "AdultCDC vs SMC" = "darkgrey",
+                                 "AdultCDC vs NeonatalCDC" = "lightgrey")) +
+    ylim(-2, 13)
+  
+  # Add the plot to the list of plots
+  plots[[gene]] <- plot
+  
+  # Save the plot with dimensions of 5 x 5 inches
+  ggsave(filename = paste0(gene, "_logFC_plot.png"), plot = plot, width = 5, height = 5)
+}
+
+# Display all plots
+for (gene in genes) {
+  print(plots[[gene]])
+}
+
+```
+
+
+```{r}
+# Fetch expression data for NT5E
+nt5e_expression <- FetchData(seurat_combined, vars = "NT5E")
+
+# Add the cell type labels (assuming your cell types are stored in the "cell_type" metadata)
+nt5e_data <- data.frame(CellType = seurat_combined@meta.data$orig.ident, NT5E = nt5e_expression)
+
+# View the expression data
+head(nt5e_data)
+
+# Boxplot of NT5E expression by cell type
+ggplot(nt5e_data, aes(x = CellType, y = NT5E)) +
+  geom_boxplot() +
+  labs(title = "Expression of NT5E by Cell Type", y = "NT5E Expression") +
+  theme_minimal()
+
+# Check how many cells express NT5E (non-zero counts)
+nt5e_non_zero <- nt5e_data %>%
+  filter(NT5E > 0) %>%
+  group_by(CellType) %>%
+  summarise(count = n())
+
+print(nt5e_non_zero)
+
+# Summarize expression data by cell type
+summary_data <- nt5e_data %>%
+  group_by(CellType) %>%
+  summarise(mean_expression = mean(NT5E, na.rm = TRUE),
+            num_cells = n())
+
+print(summary_data)
+
+```
+
+
+
+```{r}
+# Extract expression data for the genes of interest
+expression_data <- FetchData(seurat_combined, vars = c("NT5E", "CXCL6", "CTHRC1", "COL3A1", "HLAB", "CREG1", "COL6A1", "MRC2", "CTHRC1", "COL5A1", "TFP12", "LRP1", "IGFBP7", "ICAM2", "CDH5", "VWF"))
+
+# Compute the correlation matrix
+correlation_matrix <- cor(expression_data, use = "pairwise.complete.obs")
+
+# Print the correlation matrix
+print(correlation_matrix)
+
+# Convert correlation matrix to long format for ggplot
+correlation_melted <- melt(correlation_matrix)
+
+# heat map correlation heatmap
+ggplot(correlation_melted, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
+  theme_minimal() +
+  labs(x = "", y = "", fill = "Correlation") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_discrete(labels = c("ACVRL1" = "ACVRL1", "CXCL6" = "CXCL6", "ENG" = "CD105", "NT5E" = "CD73", "CDH5" = "CDH5"))  +
+  scale_y_discrete(labels = c("ACVRL1" = "ACVRL1", "CXCL6" = "CXCL6", "ENG" = "CD105", "NT5E" = "CD73", "CDH5" = "CDH5")) +
+  geom_text(aes(label = round(value, 2)), color = "black", size = 3)
+
+```
+
+```{r}
+# Extract expression data for the genes of interest
+expression_data <- FetchData(seurat_combined, vars = c("NT5E", "CXCL6", "CTHRC1", "COL3A1", "HLAB", "CREG1", "COL6A1", "MRC2", "CTHRC1", "COL5A1", "TFP12", "LRP1", "IGFBP7", "KIT", "THY1", "GATA4"))
+
+# Compute the correlation matrix
+correlation_matrix <- cor(expression_data, use = "pairwise.complete.obs")
+
+# Print the correlation matrix
+print(correlation_matrix)
+
+# Convert correlation matrix to long format for ggplot
+correlation_melted <- melt(correlation_matrix)
+
+# heat map correlation heatmap
+ggplot(correlation_melted, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
+  theme_minimal() +
+  labs(x = "", y = "", fill = "Correlation") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_discrete(labels = c("ACVRL1" = "ACVRL1", "CXCL6" = "CXCL6", "ENG" = "CD105", "NT5E" = "CD73", "THY1" = "CD90"))  +
+  scale_y_discrete(labels = c("ACVRL1" = "ACVRL1", "CXCL6" = "CXCL6", "ENG" = "CD105", "NT5E" = "CD73", "THY1" = "CD90")) +
+  geom_text(aes(label = round(value, 2)), color = "black", size = 3)
+
+
+```
+
+```{r}
+# Co-Expression
+# Plot the expression of ACVRL1, CXCL6, ENG, and CD73
+FeaturePlot(seurat_combined, features = c("CXCL6", "CTHRC1", "NT5E", "ENG"), ncol = 2) +
+  scale_x_discrete(labels = c("CXCL6" = "CXCL6", "NT5E" = "CD73"))
+
+# Create a DotPlot for the genes of interest
+DotPlot(seurat_combined, features = c("CXCL6", "NT5E", "CTHRC1"), group.by = "orig.ident") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_discrete(labels = c("CXCL6" = "CXCL6", "NT5E" = "CD73"))
+
+# Create a DotPlot for the genes of interest
+DotPlot(seurat_combined, 
+        features = c("CTHRC1", "CXCL6", "NT5E", "ENG", "COL3A1", "AKR1C3", "HIST1H1A", "HLA-B"), 
+        group.by = "orig.ident") +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+        scale_x_discrete(
+          labels = c("CTHRC1" = "CTHRC1", "CXCL6" = "CXCL6", "ENG" = "CD105", "NT5E" = "CD73")
+          )
+```
+
+
+# Secretome factors hHiPC
+```{r}
+secdf <- read.csv("Secretome_List_NT.csv")
+```
+
+```{r}
+# Extract gene names from the specified column
+Gene <- secdf$Gene.Names # Replace 'gene' with the correct column name if different
+
+secfiltered_df <- as.data.frame(Gene)
+
+```
+
+# Threshold only CDC genes
+```{r}
+# Calculate average expression levels by cluster
+avg_expression <- AggregateExpression(seurat_combined, group.by = "orig.ident")
+
+# Extract average expression data
+avg_expression_data <- avg_expression$RNA  # Assuming the data is stored in the 'RNA' assay
+
+# Check if SOST is present in the rownames
+if ("SOST" %in% rownames(avg_expression_data)) {
+  # Get the average expression of SOST in each cluster
+  sost_expression_avg <- avg_expression_data["SOST", ]
+  
+  # Display the average expression levels
+  print(sost_expression_avg)
+} else {
+  cat("SOST gene is not found in the average expression data.\n")
+}
+
+
+```
+
+```{r}
+# Fetch expression data for SOST across all cells
+sost_data <- FetchData(seurat_combined, vars = "ANGPTL3")
+
+# Add the orig.ident (cell type) as a metadata column
+sost_data$orig.ident <- seurat_combined$orig.ident
+
+# Calculate average expression for SOST by cluster
+sost_avg_by_cluster <- aggregate(sost_data$ANGPTL3, by = list(sost_data$orig.ident), FUN = mean)
+
+# Rename the columns for clarity
+colnames(sost_avg_by_cluster) <- c("Cluster", "Avg_SOST_Expression")
+
+# Display the average expression levels
+print(sost_avg_by_cluster)
+
+```
+
+
+# Which genes following SOST expression profile?
+```{r}
+# Step 1: Calculate average expression levels by cluster
+avg_expression <- AggregateExpression(seurat_combined, group.by = "orig.ident")
+
+# Extract average expression data
+avg_expression_data <- avg_expression$RNA  # Assuming the data is stored in the 'RNA' assay
+
+# Check the row names (genes)
+gene_names <- rownames(avg_expression_data)
+print(gene_names[1:5])  # Display the first 5 gene names for a quick check
+
+# Check the column names (cell types)
+cell_types <- colnames(avg_expression_data)
+print(cell_types)  # Display all column names to verify the cell types
+
+
+# Define thresholds
+threshold <- 0.009833558      # Set the threshold for expression in AdultCDC and NeonatalCDC
+low_threshold <- 0.009833558 # Set the low threshold for expression in EC, SMC, and CF
+
+# Filter genes based on expression levels
+selected_genes_onlycdc <- gene_names[
+  avg_expression_data[,"AdultCDC"] > threshold &
+  avg_expression_data[,"NeonatalCDC"] > threshold &
+  avg_expression_data[,"EC"] <= low_threshold &
+  avg_expression_data[,"SMC"] <= low_threshold &
+  avg_expression_data[,"CF"] <= low_threshold
+]
+
+
+# View selected genes
+str(selected_genes_onlycdc)
+
+# Convert selected genes to a data frame
+selected_genes_df_onlycdc <- data.frame(Gene = selected_genes_onlycdc)
+
+# Specify the file path where you want to save the CSV
+file_path <- "selected_genes_onlycdc.csv"  # Change the path if needed
+```
+
+# Find the common genes
+```{r}
+# Remove leading/trailing whitespace and convert to uppercase
+selected_genes_df_onlycdc$Gene <- trimws(toupper(selected_genes_df_onlycdc$Gene))
+secfiltered_df$Gene <- trimws(toupper(secfiltered_df$Gene))
+
+# Assuming both data frames have a column named 'Gene'
+common_genes_df <- merge(selected_genes_df_onlycdc, secfiltered_df, by = "Gene")
+
+# View the new data frame with common genes
+print(common_genes_df)
+
+```
+
+
+```{r}
+# Convert the Gene column in common_genes_df to a character vector
+features <- as.character(common_genes_df$Gene)
+
+# Create a violin plot for the common genes in the Seurat object
+VlnPlot(seurat_combined, features = features)
+
+```
+
+# Now add BMP9 secretome
+# Secretome factors hHiPC
+```{r}
+secdf <- read.csv("Secretome_List_B9add.csv")
+```
+
+```{r}
+# Extract gene names from the specified column
+Gene <- secdf$Gene.Names # Replace 'gene' with the correct column name if different
+
+secfiltered_df <- as.data.frame(Gene)
+
+```
+
+# Threshold only CDC genes
+```{r}
+# Calculate average expression levels by cluster
+avg_expression <- AggregateExpression(seurat_combined, group.by = "orig.ident")
+
+# Extract average expression data
+avg_expression_data <- avg_expression$RNA  # Assuming the data is stored in the 'RNA' assay
+
+# Check if SOST is present in the rownames
+if ("SOST" %in% rownames(avg_expression_data)) {
+  # Get the average expression of SOST in each cluster
+  sost_expression_avg <- avg_expression_data["SOST", ]
+  
+  # Display the average expression levels
+  print(sost_expression_avg)
+} else {
+  cat("SOST gene is not found in the average expression data.\n")
+}
+
+
+```
+
+```{r}
+# Fetch expression data for SOST across all cells
+sost_data <- FetchData(seurat_combined, vars = "SOST")
+
+# Add the orig.ident (cell type) as a metadata column
+sost_data$orig.ident <- seurat_combined$orig.ident
+
+# Calculate average expression for SOST by cluster
+sost_avg_by_cluster <- aggregate(sost_data$SOST, by = list(sost_data$orig.ident), FUN = mean)
+
+# Rename the columns for clarity
+colnames(sost_avg_by_cluster) <- c("Cluster", "Avg_SOST_Expression")
+
+# Display the average expression levels
+print(sost_avg_by_cluster)
+
+```
+
+
+# Which genes following SOST expression profile?
+```{r}
+# Step 1: Calculate average expression levels by cluster
+avg_expression <- AggregateExpression(seurat_combined, group.by = "orig.ident")
+
+# Extract average expression data
+avg_expression_data <- avg_expression$RNA  # Assuming the data is stored in the 'RNA' assay
+
+# Check the row names (genes)
+gene_names <- rownames(avg_expression_data)
+print(gene_names[1:5])  # Display the first 5 gene names for a quick check
+
+# Check the column names (cell types)
+cell_types <- colnames(avg_expression_data)
+print(cell_types)  # Display all column names to verify the cell types
+
+
+# Define thresholds
+threshold <- 0.009833558      # Set the threshold for expression in AdultCDC and NeonatalCDC
+low_threshold <- 0.009833558 # Set the low threshold for expression in EC, SMC, and CF
+
+# Filter genes based on expression levels
+selected_genes_onlycdc <- gene_names[
+  avg_expression_data[,"AdultCDC"] > threshold &
+  avg_expression_data[,"NeonatalCDC"] > threshold &
+  avg_expression_data[,"EC"] <= low_threshold &
+  avg_expression_data[,"SMC"] <= low_threshold &
+  avg_expression_data[,"CF"] <= low_threshold
+]
+
+
+# View selected genes
+str(selected_genes_onlycdc)
+
+# Convert selected genes to a data frame
+selected_genes_df_onlycdc <- data.frame(Gene = selected_genes_onlycdc)
+
+# Specify the file path where you want to save the CSV
+file_path <- "selected_genes_onlycdc.csv"  # Change the path if needed
+```
+
+# Find the common genes
+```{r}
+# Remove leading/trailing whitespace and convert to uppercase
+selected_genes_df_onlycdc$Gene <- trimws(toupper(selected_genes_df_onlycdc$Gene))
+secfiltered_df$Gene <- trimws(toupper(secfiltered_df$Gene))
+
+# Assuming both data frames have a column named 'Gene'
+common_genes_df <- merge(selected_genes_df_onlycdc, secfiltered_df, by = "Gene")
+
+# View the new data frame with common genes
+print(common_genes_df)
+
+```
+
+
+```{r}
+# Convert the Gene column in common_genes_df to a character vector
+features <- as.character(common_genes_df$Gene)
+
+# Create a violin plot for the common genes in the Seurat object
+VlnPlot(seurat_combined, features = features)
+
+```
+
+
+```{r}
+# Specify the file path where you want to save the CSV
+output_file_path <- "C:/Users/micha/OneDrive/Documents/SingleCell_CSphere/CSPhere/secfiltered_df.csv"
+
+# Save the data frame as a CSV
+write.csv(secfiltered_df, file = output_file_path, row.names = FALSE)
+```
+
+# all violins
+```{r}
+# Trim whitespace from gene names
+secfiltered_genes_clean <- trimws(secfiltered_genes)
+rownames_seurat_clean <- trimws(rownames(seurat_combined))
+
+# Filter valid genes
+valid_genes <- secfiltered_genes_clean[secfiltered_genes_clean %in% rownames_seurat_clean]
+
+# Generate and display a violin plot for each gene in valid_genes
+for (gene in valid_genes) {
+  plot <- VlnPlot(seurat_combined, features = gene, pt.size = 0.5)
+  print(plot)
+}
+
+```
+
+
+
+
+
+```{r}
+features <- c("DMRT2", "NT5E", "CTHRC1")
+featuresbmp <- c("GDF2", "ACVRL1", "ISLR")
+featuresbmp2 <- c("SOST", "IGFBP3", "ISLR")
+featureserbb <- c("EGFR", "ERBB2", "ERBB4")
+featuresEC <- c("CDH5", "VWF", "PECAM1")
+featurescxc <- c("CXCL6", "ENG", "ACVRL1")
+featuresfibro <- c("IGFBP2", "INMT", "SBSPON")
+featuressmc <- c("ACTA2", "CALD1", "TAGLN")
+featurescalc <- c("SOST", "ANXA2", "S100A6")
+
+VlnPlot(seurat_combined, features = features)
+VlnPlot(seurat_combined, features = featuresbmp)
+VlnPlot(seurat_combined, features = featuresbmp2)
+VlnPlot(seurat_combined, features = featureserbb)
+VlnPlot(seurat_combined, features = featurescxc)
+VlnPlot(seurat_combined, features = featuresfibro)
+VlnPlot(seurat_combined, features = featuresEC)
+VlnPlot(seurat_combined, features = featuressmc)
+VlnPlot(seurat_combined, features = featurescalc)
+```
+
+```{r}
+# Access metadata from the Seurat object
+metadata <- seurat_combined@meta.data
+
+# Count the number of cells per orig.ident
+cell_counts <- table(metadata$orig.ident)
+
+# Display the result
+print(cell_counts)
+```
+
+
+```{r}
+# List of genes to analyze
+genes2 <- c("SOST", "ISLR")
+
+# Create an empty list to store plots
+plots <- list()
+
+# Loop through each gene
+for (gene in genes2) {
+  
+  # Extract logFC for each gene from each comparison
+  logfc_values <- data.frame(
+    Comparison = c("AdultCDC vs CF", "AdultCDC vs EC", "AdultCDC vs SMC", "AdultCDC vs NeonatalCDC"),
+    logFC = c(
+      markers_adultcdc_vs_cf[gene, "avg_log2FC"],
+      markers_adultcdc_vs_ec[gene, "avg_log2FC"],
+      markers_adultcdc_vs_smc[gene, "avg_log2FC"],
+      markers_adultcdc_vs_neonatalcdc[gene, "avg_log2FC"]
+    )
+  )
+  
+  # Extract logFC and p-values for each gene from each comparison
+  logfc_and_pvalues <- data.frame(
+    Comparison = c("AdultCDC vs CF", "AdultCDC vs EC", "AdultCDC vs SMC", "AdultCDC vs NeonatalCDC"),
+    logFC = c(
+      markers_adultcdc_vs_cf[gene, "avg_log2FC"],
+      markers_adultcdc_vs_ec[gene, "avg_log2FC"],
+      markers_adultcdc_vs_smc[gene, "avg_log2FC"],
+      markers_adultcdc_vs_neonatalcdc[gene, "avg_log2FC"]
+    ),
+    p_value = c(
+      markers_adultcdc_vs_cf[gene, "p_val"],
+      markers_adultcdc_vs_ec[gene, "p_val"],
+      markers_adultcdc_vs_smc[gene, "p_val"],
+      markers_adultcdc_vs_neonatalcdc[gene, "p_val"]
+    )
+  )
+  
+  # Add significance stars based on p-value
+  logfc_and_pvalues$significance <- cut(logfc_and_pvalues$p_value,
+    breaks = c(-Inf, 0.001, 0.01, 0.05, 1),
+    labels = c("***", "**", "*", "ns"),
+    right = FALSE
+  )
+  
+  # Create the plot for the current gene
+  plot <- ggplot(logfc_and_pvalues, aes(x = Comparison, y = logFC, fill = Comparison)) +
+    geom_bar(stat = "identity") +
+    geom_text(aes(label = significance), vjust = -0.5, size = 5) +
+    theme_minimal() +
+    labs(title = paste("Log Fold Change of", gene, "Across Comparisons"),
+         x = "Comparison",
+         y = "Log Fold Change") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_fill_brewer(palette = "Purples") 
+  
+  # Add the plot to the list of plots
+  plots[[gene]] <- plot
+}
+
+# Display all plots
+for (gene in genes2) {
+  print(plots[[gene]])
+}
+```
+
+```{r}
+# Create a DotPlot for the genes of interest
+DotPlot(seurat_combined, 
+        features = c("CXCL6", "NT5E", "CTHRC1", "ACVRL1"), 
+        group.by = "orig.ident") +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+        scale_x_discrete(
+          labels = c("CTHRC1" = "CTHRC1", "CXCL6" = "CXCL6", "ENG" = "CD105", "NT5E" = "CD73", "ACVRL1" = "ALK1")
+          )
+```
+
+
+
+```{r}
+# Create a DotPlot for the genes of interest
+exp <- DotPlot(seurat_combined, 
+        features = c("ENG", "ACVRL1", "ISLR", "IGFBP3", "SOST", "GDF2"), 
+        group.by = "orig.ident") +
+        theme(
+          axis.text.x = element_text(angle = 45, hjust = 1, size = 12),  # Adjust x-axis text size
+          axis.text.y = element_text(size = 12),  # Adjust y-axis text size
+          plot.title = element_text(size = 12),  # Adjust title size
+          legend.text = element_text(size = 12),  # Adjust legend text size
+          legend.title = element_text(size = 12)   # Adjust legend title size
+        ) +
+        scale_x_discrete(
+          labels = c("CTHRC1" = "CTHRC1", "CXCL6" = "CXCL6", "ENG" = "CD105", "NT5E" = "CD73")
+        ) 
+        #scale_color_gradient(low = "#1B9E77", high = "#E7298A")
+
+#ggsave("dotplot.png", plot = exp, dpi = 1200, width = 10, height = 8)
+exp
+
+```
+
+
+```{r}
+FeaturePlot(seurat_combined, features = c("SOST", "ISLR"), blend = TRUE)
+
+# Blended feature plot
+p1 <- FeaturePlot(seurat_combined, features = c("SOST", "ISLR"), blend = TRUE)
+
+# DimPlot for orig.ident with cluster labels
+p2 <- DimPlot(seurat_combined, group.by = "orig.ident", label = TRUE, repel = TRUE)
+
+# Combine FeaturePlot and DimPlot side by side
+
+p2
+```
+
+
+```{r}
+DoHeatmap(subset(seurat_combined, downsample = 100), features = features, size = 3)
+```
+
+
+```{r}
+FeaturePlot(seurat_combined, features = c("CXCL6", "CTHRC1"), blend = TRUE)
+
+# Blended feature plot
+p1 <- FeaturePlot(seurat_combined, features = c("CXCL6", "CTHRC1"), blend = TRUE)
+
+# DimPlot for orig.ident with cluster labels
+p2 <- DimPlot(seurat_combined, group.by = "orig.ident", label = TRUE, repel = TRUE)
+
+p2
+p1
+
+# Save the plot with sufficient width and height
+ggsave("feature_plot.png", plot = p1, width = 10, height = 3, dpi = 600)
+
+```
+
+
+```{r}
+FeaturePlot(seurat_combined, features = c("CXCL6", "ACVRL1"), blend = TRUE)
+
+# Blended feature plot
+p11 <- FeaturePlot(seurat_combined, features = c("CXCL6", "ACVRL1"), blend = TRUE) +
+  theme(legend.position = "bottom") +  # Move legend to the bottom
+  guides(color = guide_legend(title = "Your Legend Title", title.theme = element_text(size = 8))) +  # Adjust title size
+  theme(legend.text = element_text(size = 8)) 
+
+p11
+
+# Save the plot with sufficient width and height
+ggsave("feature_plot14.png", plot = p11, width = 10, height = 3, dpi = 600)
+```
+
+
+```{r}
+# Fetch expression data
+expression_data <- FetchData(seurat_combined, vars = c("CXCL6", "NT5E"))
+
+# Set a threshold for expression (you can adjust this based on your dataset)
+threshold <- 0.08  # For example, count cells expressing more than 0
+
+# Identify co-expressing cells
+co_expressed_cells <- sum(expression_data$CXCL6 > threshold & expression_data$NT5E > threshold)
+
+# Output the count
+print(co_expressed_cells)
+
+```
+
+
+```{r}
+# Extract the expression data (use "counts" or "data" depending on your needs)
+expression_data <- GetAssayData(seurat_combined, assay = "RNA", layer = "data")  # or "counts"
+
+# Calculate the average expression for the whole dataset
+average_expression <- mean(expression_data)
+
+# Output the result
+cat("Average expression for the entire dataset:", average_expression, "\n")
+
+```
+
+
+
+```{r}
+FeaturePlot(seurat_combined, features = c("ANXA2", "SOST"), blend = TRUE)
+
+# Blended feature plot
+p111 <- FeaturePlot(seurat_combined, features = c("ANXA2", "SOST"), blend = TRUE)
+
+p111
+
+# Save the plot with sufficient width and height
+ggsave("feature_plotSOST.png", plot = p111, width = 10, height = 3, dpi = 600)
+```
+
+
+
+```{r}
+# Add row names as a column called "Gene"
+markers_adultcdc_vs_neonatalcdc_save <- rownames_to_column(markers_adultcdc_vs_neonatalcdc, var = "Gene")
+
+
+# Save the data frame as an Excel file
+write_xlsx(markers_adultcdc_vs_neonatalcdc_save, "markers_adultcdc_vs_neonatalcdc.xlsx")
+
+```
+
+```{r}
+save.image(file = "my_environment.RData")
+```
+
+```{r}
+sessionInfo()
+```
+
