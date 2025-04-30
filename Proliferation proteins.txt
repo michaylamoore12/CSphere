@@ -1,0 +1,40 @@
+GO:0008284 – Positive regulation of cell proliferation
+
+AK1C3
+NAMPT
+TSP1
+FA98A
+ACL6A
+ANM1
+FINC
+
+
+heart development [GO:0007507]
+
+CO3A1
+PDLI2
+MP2K2
+SORCN
+SPD2B
+PDLI1
+MP2K1
+MICA2
+PDLI5
+OFUT1
+FBN1
+FINC
+
+cell population proliferation [GO:0008283]
+
+PTGES
+YAP1
+ASPH
+TRXR1
+CK5P3
+CRK
+
+GO:0003007 Heart morphogenesis
+
+CO5A1
+FLNA
+

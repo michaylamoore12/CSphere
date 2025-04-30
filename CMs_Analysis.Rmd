@@ -1,0 +1,315 @@
+---
+title: "CMs_Analysis"
+author: "Michayla Moore"
+date: "2025-04-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(GEOquery)
+
+# Download supplementary files
+getGEOSuppFiles("GSE109816")
+```
+
+
+```{r}
+library(Seurat)
+library(dplyr)
+library(Matrix)
+library(data.table)
+
+# Read the expression matrix
+expr_matrix2 <- fread("GSE109816/GSE109816_normal_heart_umi_matrix.csv.gz", data.table = FALSE)
+
+# Inspect the format (often the first column is gene names, the rest are barcodes)
+head(expr_matrix2[, 1:5])
+```
+
+```{r}
+rownames(expr_matrix2) <- expr_matrix2[, 1]
+expr_matrix2 <- expr_matrix2[, -1]
+```
+
+```{r}
+# Reload from scratch
+expr_matrix2 <- fread("GSE109816/GSE109816_normal_heart_umi_matrix.csv.gz", data.table = FALSE)
+
+# Set gene names as rownames
+rownames(expr_matrix2) <- expr_matrix2[[1]]
+
+# Remove the first column (which just contained gene names)
+expr_matrix2 <- expr_matrix2[, -1]
+
+# Convert to matrix
+expr_matrix2 <- as.matrix(expr_matrix2)
+
+# Create Seurat object
+seurat_heart2 <- CreateSeuratObject(counts = expr_matrix2, project = "GSE109816_Heart", min.cells = 3, min.features = 200)
+
+```
+
+```{r}
+any(duplicated(rownames(expr_matrix2)))  # Should be FALSE
+```
+
+```{r}
+# Read in cell info file (if not already loaded)
+library(data.table)
+cell_info <- fread("GSE109816/GSE109816_normal_heart_cell_info.txt.gz", data.table = FALSE)
+
+# Check the first few rows of the cell info
+head(cell_info)
+```
+
+```{r}
+# Read in the cluster/cell type info
+cluster_info <- fread("GSE109816/GSE109816_normal_heart_cell_cluster_info.txt.gz", data.table = FALSE)
+
+# Set 'ID' as rownames
+rownames(cluster_info) <- cluster_info$ID
+
+head(cluster_info)
+```
+
+```{r}
+# Confirm barcodes overlap
+common_barcodes <- intersect(colnames(seurat_heart2), rownames(cluster_info))
+
+# Add the CellType column as metadata
+seurat_heart2 <- AddMetaData(seurat_heart2, metadata = cluster_info[common_barcodes, ])
+head(seurat_heart2$Group)
+```
+
+```{r}
+# Subset only cells labeled as 'CM' (or 'Cardiomyocytes'—adjust if needed)
+unique(seurat_heart2$CellType)  # Check all available cell types first
+
+seurat_cardiomyocytes <- subset(seurat_heart2, subset = CellType == "CM")
+unique(seurat_cardiomyocytes$CellType) 
+
+head(seurat_cardiomyocytes$CellType)
+head(seurat_cardiomyocytes$Group)
+unique(seurat_cardiomyocytes$Group) 
+
+seurat_cardiomyocytes2 <- subset(seurat_heart2, subset = Group == "CM")
+unique(seurat_cardiomyocytes2$Group)
+```
+
+```{r}
+# Set the orig.ident for all cardiomyocyte cells to "CM"
+seurat_cardiomyocytes2$orig.ident <- "CM"
+
+# View the first few rows of the metadata for 'orig.ident'
+head(seurat_cardiomyocytes2@meta.data$orig.ident)
+# Check how many cardiomyocytes are left
+ncol(seurat_cardiomyocytes2)
+
+head(seurat_combined@meta.data$orig.ident)
+```
+
+```{r}
+# Identify mitochondrial genes (assuming gene names start with "MT-")
+#mito_genes2 <- grep("^MT-", rownames(seurat_cardiomyocytes), value = TRUE)
+
+# Calculate percentage of mitochondrial genes expressed in each cell
+#seurat_cardiomyocytes[["percent.mt"]] <- PercentageFeatureSet(seurat_cardiomyocytes, features = mito_genes2)
+
+# Check distribution of mitochondrial gene percentage (optional)
+#VlnPlot(seurat_cardiomyocytes, features = "percent.mt")
+```
+
+
+```{r}
+# Normalize
+seurat_sampleCM_norm <- NormalizeData(seurat_cardiomyocytes2)
+
+# Feature
+seurat_sampleCM_norm <- FindVariableFeatures(seurat_sampleCM_norm)
+
+# Scale
+seurat_sampleCM_norm <- ScaleData(seurat_sampleCM_norm)
+
+# Run PCA
+seurat_sampleCM_norm <- RunPCA(seurat_sampleCM_norm)
+```
+
+
+```{r}
+seurat_combined_with_CMs <- merge(seurat_combined, y = seurat_sampleCM_norm)
+```
+
+# Combine Counts from All Groups Into New "seurat_combined"
+```{r}
+common_genes <- intersect(rownames(seurat_combined_with_CMs@assays$RNA$counts.GSE109816_Heart), 
+                          rownames(seurat_combined_with_CMs@assays$RNA$counts.SeuratProject))
+
+counts_heart <- seurat_combined_with_CMs@assays$RNA$counts.GSE109816_Heart[common_genes, ]
+counts_seurat <- seurat_combined_with_CMs@assays$RNA$counts.SeuratProject[common_genes, ]
+
+combined_counts2 <- cbind(counts_heart, counts_seurat)
+
+# Create Seurat object with combined counts
+seurat_combined_with_CMs_final <- CreateSeuratObject(counts = combined_counts2)
+```
+
+
+# Feature, Scale, and PCA
+```{r}
+# Normalize 
+seurat_combined_with_CMs_final <- NormalizeData(seurat_combined_with_CMs_final)
+
+# Continue
+seurat_combined_with_CMs_final <- FindVariableFeatures(seurat_combined_with_CMs_final)
+seurat_combined_with_CMs_final <- ScaleData(seurat_combined_with_CMs_final)
+seurat_combined_with_CMs_final <- RunPCA(seurat_combined_with_CMs_final)
+
+print(seurat_combined_with_CMs_final[["pca"]])
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Find Features (Most Variable Genes) and Anchors (Batch Effects)
+```{r}
+# List datasets (change clean to norm 3/6/25)
+seurat_objects2 <- list(seurat_sampleAd_norm, seurat_sampleCF_norm, seurat_sampleEC_norm, seurat_sampleNeo_norm, seurat_sampleSMC_norm,
+                       seurat_sampleCM_norm)
+
+# Ident integration features
+# The function identifies genes that show variation across the datasets, which are likely to contribute to the biological signal during # the integration process. This helps reduce noise and ensures that the integration process focuses on the relevant aspects of the data.
+features2 <- SelectIntegrationFeatures(object.list = seurat_objects2)
+
+# returns only the genes that are present in all Seurat objects.
+common_features2 <- Reduce(intersect, lapply(seurat_objects2, function(x) rownames(GetAssayData(x, assay = "RNA", layer = "counts"))))
+
+# By subsetting each dataset to only include the common features, you ensure that the integration step is performed on the exact same 
+# set of genes across all datasets. 
+seurat_objects2 <- lapply(seurat_objects2, function(x) {
+  x <- subset(x, features = common_features2)
+  return(x)
+})
+
+# Align
+# Anchors are pairs of cells from different datasets that are biologically similar and can be used as reference points 
+# for aligning the datasets.
+anchors <- FindIntegrationAnchors(object.list = seurat_objects2, anchor.features = features2)
+```
+
+
+# Integrate Data (Make seurat_combined)
+```{r}
+# integrate data
+seurat_combined_with_CMs <- IntegrateData(anchorset = anchors)
+```
